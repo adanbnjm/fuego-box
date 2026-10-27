@@ -42,7 +42,10 @@ function EmpleadosSection({ empleados }: EmpleadosSectionProps) {
             >
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-500/10 text-xl font-bold text-orange-400">
-                  {empleado.nombre_completo.trim().charAt(0).toUpperCase()}
+                  {(empleado.nombre_completo ?? "E")
+                    .trim()
+                    .charAt(0)
+                    .toUpperCase()}
                 </div>
 
                 <div className="min-w-0 flex-1">
