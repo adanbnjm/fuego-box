@@ -14,6 +14,9 @@ import {
 } from "../services/catalogoService";
 import MenuCard from "../components/cliente/MenuCard";
 import HistorialPedidos from "../components/cliente/HistorialPedidos";
+import { useApi } from "../hooks/useApi";
+import { SelectorMoneda } from "../components/SelectorMoneda";
+import { useMoneda } from "../hooks/useMoneda";
 
 interface PedidoCreado {
   pedido_id: number;
@@ -28,41 +31,71 @@ interface PedidoCreado {
 }
 
 function ClientePage() {
-  const [menus, setMenus] = useState<Menu[]>([]);
+  const { moneda, bsPorDolar } = useMoneda();
+
+  const simboloMoneda = moneda === "USD" ? "USD" : "Bs";
+
+  const convertirPrecio = (precio: string | number) => {
+    const valor = Number(precio);
+
+    if (moneda === "USD" && bsPorDolar !== null) {
+      return valor / bsPorDolar;
+    }
+
+    return valor;
+  };
+  // Zonas y pedidos
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [pedidos, setPedidos] = useState<PedidoCliente[]>([]);
 
-  const [cargandoMenus, setCargandoMenus] = useState(true);
   const [cargandoPedidos, setCargandoPedidos] = useState(true);
   const [cargandoZonas, setCargandoZonas] = useState(true);
 
-  const [errorMenus, setErrorMenus] = useState("");
   const [errorPedidos, setErrorPedidos] = useState("");
   const [errorZonas, setErrorZonas] = useState("");
   const [errorCrear, setErrorCrear] = useState("");
 
-  const [menuSeleccionado, setMenuSeleccionado] = useState<Menu | null>(null);
+  // Carga del catálogo mediante useApi
+  const {
+    data: menusData,
+    cargando: cargandoMenus,
+    error: errorMenusApi,
+    recargar: recargarMenus,
+  } = useApi<Menu[]>(async () => {
+    const respuesta = await obtenerMenus();
+    return respuesta.data.filter((menu) => menu.publicado);
+  });
 
+  const menus = menusData ?? [];
+  const errorMenus = errorMenusApi ?? "";
+
+  // Paginación del catálogo
+  const [paginaActual, setPaginaActual] = useState(1);
+  const POR_PAGINA = 6;
+
+  const totalPaginas = Math.ceil(menus.length / POR_PAGINA);
+
+  const menusPaginados = menus.slice(
+    (paginaActual - 1) * POR_PAGINA,
+    paginaActual * POR_PAGINA,
+  );
+
+  useEffect(() => {
+    setPaginaActual((pagina) =>
+      Math.max(1, Math.min(pagina, Math.max(1, totalPaginas))),
+    );
+  }, [totalPaginas]);
+
+  // Formulario y selección de menú
+  const [menuSeleccionado, setMenuSeleccionado] = useState<Menu | null>(null);
   const [zonaId, setZonaId] = useState("");
   const [direccion, setDireccion] = useState("");
   const [cantidad, setCantidad] = useState(1);
   const [creandoPedido, setCreandoPedido] = useState(false);
   const [pedidoCreado, setPedidoCreado] = useState<PedidoCreado | null>(null);
 
+  // Cargar zonas y pedidos del cliente
   useEffect(() => {
-    const cargarMenus = async () => {
-      try {
-        const respuesta = await obtenerMenus();
-
-        setMenus(respuesta.data.filter((menu) => menu.publicado));
-      } catch (error) {
-        console.error("Error al cargar menús:", error);
-        setErrorMenus("No pudimos cargar los menús disponibles.");
-      } finally {
-        setCargandoMenus(false);
-      }
-    };
-
     const cargarZonas = async () => {
       try {
         const respuesta = await obtenerZonas();
@@ -74,6 +107,7 @@ function ClientePage() {
         setCargandoZonas(false);
       }
     };
+
     const cargarPedidos = async () => {
       try {
         const respuesta = await obtenerMisPedidos();
@@ -85,7 +119,7 @@ function ClientePage() {
         setCargandoPedidos(false);
       }
     };
-    void cargarMenus();
+
     void cargarZonas();
     void cargarPedidos();
   }, []);
@@ -164,14 +198,11 @@ function ClientePage() {
       setPedidoCreado(respuesta.data);
       setMenuSeleccionado(null);
 
-      // Actualizar el catálogo después de crear el pedido.
-      const respuestaMenus = await obtenerMenus();
-
-      setMenus(respuestaMenus.data.filter((menu) => menu.publicado));
+      // Actualizar el catálogo mediante el hook.
+      recargarMenus();
 
       // Recargar los pedidos del cliente.
       const respuestaPedidos = await obtenerMisPedidos();
-
       setPedidos(respuestaPedidos.data);
       setErrorPedidos("");
     } catch (error: unknown) {
@@ -226,13 +257,17 @@ function ClientePage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={cerrarSesion}
-          className="shrink-0 rounded-xl border border-orange-500/40 px-4 py-2.5 text-sm font-bold text-orange-400 transition hover:bg-orange-500 hover:text-black"
-        >
-          Cerrar sesión
-        </button>
+        <div className="flex items-center gap-3">
+          <SelectorMoneda />
+
+          <button
+            type="button"
+            onClick={cerrarSesion}
+            className="shrink-0 rounded-xl border border-orange-500/40 px-4 py-2.5 text-sm font-bold text-orange-400 transition hover:bg-orange-500 hover:text-black"
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       {/* Confirmación del pedido */}
@@ -253,7 +288,8 @@ function ClientePage() {
           </p>
 
           <p className="mt-3 text-neutral-300">
-            Total: Bs {Number(pedidoCreado.total_pedido).toFixed(2)}
+            Total: {simboloMoneda}{" "}
+            {convertirPrecio(pedidoCreado.total_pedido).toFixed(2)}
           </p>
 
           <p className="mt-1 text-sm text-neutral-400">
@@ -269,6 +305,7 @@ function ClientePage() {
           </button>
         </section>
       )}
+
       {/* Formulario de pedido */}
       {menuSeleccionado && (
         <section
@@ -286,7 +323,8 @@ function ClientePage() {
               </h2>
 
               <p className="mt-2 text-xl font-bold text-orange-400">
-                Bs {Number(menuSeleccionado.precio_menu).toFixed(2)}{" "}
+                {simboloMoneda}{" "}
+                {convertirPrecio(menuSeleccionado.precio_menu).toFixed(2)}{" "}
                 <span className="text-sm font-normal text-neutral-400">
                   por menú
                 </span>
@@ -356,6 +394,7 @@ function ClientePage() {
                 placeholder="Ej.: calle, número de casa, edificio o referencia..."
                 className="w-full resize-y rounded-xl border border-white/10 bg-[#101010] px-4 py-3 text-white outline-none placeholder:text-neutral-600 focus:border-orange-500"
               />
+
               <p className="mt-1 text-xs text-neutral-500">
                 Escribe los datos necesarios para identificar tu dirección.
               </p>
@@ -397,8 +436,10 @@ function ClientePage() {
               <div>
                 <p className="text-sm text-neutral-400">Total estimado</p>
                 <p className="text-2xl font-black text-orange-400">
-                  Bs{" "}
-                  {(Number(menuSeleccionado.precio_menu) * cantidad).toFixed(2)}
+                  {simboloMoneda}{" "}
+                  {convertirPrecio(
+                    Number(menuSeleccionado.precio_menu) * cantidad,
+                  ).toFixed(2)}
                 </p>
               </div>
 
@@ -429,6 +470,7 @@ function ClientePage() {
         </section>
       )}
 
+      {/* Historial de pedidos */}
       <HistorialPedidos
         pedidos={pedidos}
         cargando={cargandoPedidos}
@@ -459,16 +501,46 @@ function ClientePage() {
           </p>
         )}
 
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {menus.map((menu) => (
-            <MenuCard
-              key={menu.menu_dia_id}
-              menu={menu}
-              alElegir={elegirMenu}
-              formatearFecha={formatearFecha}
-            />
-          ))}
-        </div>
+        {!cargandoMenus && !errorMenus && menus.length > 0 && (
+          <>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {menusPaginados.map((menu) => (
+                <MenuCard
+                  key={menu.menu_dia_id}
+                  menu={menu}
+                  alElegir={elegirMenu}
+                  formatearFecha={formatearFecha}
+                />
+              ))}
+            </div>
+
+            {totalPaginas > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual((pagina) => pagina - 1)}
+                  disabled={paginaActual === 1}
+                  className="rounded-xl border border-white/10 px-4 py-2 font-semibold transition hover:border-orange-500 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+
+                <span className="text-sm text-neutral-400">
+                  Página {paginaActual} de {totalPaginas}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual((pagina) => pagina + 1)}
+                  disabled={paginaActual === totalPaginas}
+                  className="rounded-xl bg-orange-500 px-4 py-2 font-bold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </section>
     </main>
   );

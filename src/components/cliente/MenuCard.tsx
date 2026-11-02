@@ -1,4 +1,5 @@
 import type { Menu } from "../../services/catalogoService";
+import { useMoneda } from "../../hooks/useMoneda";
 
 interface MenuCardProps {
   menu: Menu;
@@ -7,6 +8,16 @@ interface MenuCardProps {
 }
 
 function MenuCard({ menu, alElegir, formatearFecha }: MenuCardProps) {
+  const { moneda, bsPorDolar } = useMoneda();
+
+  const precioOriginal = Number(menu.precio_menu);
+
+  const precioMostrado =
+    moneda === "USD" && bsPorDolar !== null
+      ? precioOriginal / bsPorDolar
+      : precioOriginal;
+
+  const simboloMoneda = moneda === "USD" ? "USD" : "Bs";
   return (
     <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#191919]">
       {menu.imagen_url ? (
@@ -66,7 +77,7 @@ function MenuCard({ menu, alElegir, formatearFecha }: MenuCardProps) {
 
         <div className="mt-5 flex items-center justify-between gap-3">
           <p className="text-2xl font-bold text-orange-400">
-            Bs {Number(menu.precio_menu).toFixed(2)}
+            {simboloMoneda} {precioMostrado.toFixed(2)}
           </p>
 
           <button

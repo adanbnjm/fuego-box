@@ -1,4 +1,5 @@
 import type { PedidoCliente } from "../../services/pedidosService";
+import { useMoneda } from "../../hooks/useMoneda";
 
 interface HistorialPedidosProps {
   pedidos: PedidoCliente[];
@@ -13,6 +14,9 @@ function HistorialPedidos({
   error,
   formatearFecha,
 }: HistorialPedidosProps) {
+  const { moneda, bsPorDolar } = useMoneda();
+
+  const simboloMoneda = moneda === "USD" ? "USD" : "Bs";
   return (
     <section className="mx-auto mt-14 max-w-7xl pb-8">
       <h2 className="mb-5 text-2xl font-bold">Mis pedidos</h2>
@@ -48,9 +52,12 @@ function HistorialPedidos({
               </div>
 
               <p className="mt-4 text-2xl font-bold">
-                Bs {Number(pedido.total_pedido).toFixed(2)}
+                {simboloMoneda}{" "}
+                {(moneda === "USD" && bsPorDolar !== null
+                  ? Number(pedido.total_pedido) / bsPorDolar
+                  : Number(pedido.total_pedido)
+                ).toFixed(2)}
               </p>
-
               <div className="mt-3 space-y-2 text-sm text-neutral-400">
                 <p>Código: {pedido.token_recoger}</p>
                 <p>Pago: {pedido.metodo_pago}</p>
